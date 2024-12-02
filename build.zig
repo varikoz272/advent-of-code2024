@@ -4,23 +4,34 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{
-        .name = "2",
-        .root_source_file = b.path("src/2.2.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    buildAll(b, target, optimize);
+}
 
-    b.installArtifact(exe);
+pub fn buildAll(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
+    const dir = std.fs.cwd().openDir("src", .{ .iterate = true }) catch unreachable;
 
-    const run_cmd = b.addRunArtifact(exe);
+    var buffer: [32]u8 = undefined;
 
-    run_cmd.step.dependOn(b.getInstallStep());
+    var iter = dir.iterate();
+    while (iter.next() catch unreachable) |task_source| {
+        const exe = b.addExecutable(.{
+            .name = task_source.name[0 .. task_source.name.len - 4],
+            .root_source_file = b.path(std.fmt.bufPrint(&buffer, "src/{s}", .{task_source.name}) catch unreachable),
+            .target = target,
+            .optimize = optimize,
+        });
 
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
+        b.installArtifact(exe);
+
+        const run_cmd = b.addRunArtifact(exe);
+
+        run_cmd.step.dependOn(b.getInstallStep());
+
+        // if (b.args) |args| {
+        //     run_cmd.addArgs(args);
+        // }
+
+        const run_step = b.step(task_source.name[0 .. task_source.name.len - 4], "run the task");
+        run_step.dependOn(&run_cmd.step);
     }
-
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
 }
